@@ -18,17 +18,18 @@ import (
 )
 
 type sitemapPage struct {
-	Path     string
-	Subpages []sitemapPage
-	ID       string
-	Link     string
-	Title    string
-	Template string
-	Content  string
+	Path      string
+	Subpages  []sitemapPage
+	ID        string
+	Link      string
+	Title     string
+	LinkTitle string
+	Template  string
+	Content   string
 }
 
 func (p sitemapPage) PublicPath() string {
-	s:= strings.Replace(p.Path, "site/", "", 1)
+	s := strings.Replace(p.Path, "site/", "", 1)
 	s = strings.Replace(s, filepath.Ext(s), "", 1)
 	s = fmt.Sprintf("/%s.html", s)
 	return s
@@ -225,12 +226,17 @@ func (ss *SiteStrapper) parseContent(content string) (htmlContent string, err er
 	return htmlContent, nil
 }
 
+type page struct {
+	Link  string
+	Title string
+}
+
 func (ss *SiteStrapper) getPage(ref string) (p page, err error) {
 	for _, tmp := range ss.sitemap.Pages {
 		if tmp.ID == ref {
 			return page{
 				Link:  tmp.Link,
-				Title: tmp.Title,
+				Title: tmp.LinkTitle,
 			}, nil
 		}
 	}
@@ -297,6 +303,8 @@ func (ss *SiteStrapper) makeTemplate(smT sitemapTemplate) (siteT *siteTemplate, 
 			"page": func(id string) (page page) {
 				for _, p := range ss.sitemap.Pages {
 					if p.ID == id {
+						page.Title = p.LinkTitle
+						page.Link = p.Link
 						return page
 					}
 				}
@@ -329,15 +337,11 @@ func (ss *SiteStrapper) makeTemplate(smT sitemapTemplate) (siteT *siteTemplate, 
 	return siteT, nil
 }
 
-type page struct {
-	Link  string
-	Title string
-}
-
 type pageHeader struct {
-	Template string
-	ID       string
-	Title    string
+	Template  string
+	ID        string
+	Title     string
+	LinkTitle string `yaml:"linkTitle"`
 }
 
 func (ss *SiteStrapper) makeTemplates() (err error) {
@@ -400,6 +404,12 @@ func (ss *SiteStrapper) gatherPageInfo(page *sitemapPage) (err error) {
 		tmp := strings.Split(page.ID, "/")
 		last := tmp[len(tmp)-1]
 		page.Title = fmt.Sprintf("%s%s", strings.ToUpper(last[0:1]), last[1:])
+	}
+
+	if len(header.LinkTitle) > 0 {
+		page.LinkTitle = header.LinkTitle
+	} else {
+		page.LinkTitle = page.Title
 	}
 
 	page.Template = header.Template

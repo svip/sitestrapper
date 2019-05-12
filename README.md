@@ -95,6 +95,9 @@ The header understands the following parameters:
 * `id`: The identification for the page.  This allows you to refer to the page elsewhere.  If not provided, the path of
   the file will be used to determine the `id`.
 * `template`: Which template to use.  If not provided, `main` is assumed.
+* `linkTitle`: Specifies a different title for the page, that will appear when the template functions described above,
+called `page` and `pages` obtain the page.  This allows you to have a different title displayed in the menu, then what
+appears on the page itself.
 
 So far, the content has to be written in [CommonMark Markdown][commonmarkspec].  In the future, more formats will be
 supported, but will be inferred by the file extension, so it's wise to name your files `<page>.md` for now.
