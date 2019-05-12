@@ -96,13 +96,28 @@ The header understands the following parameters:
   the file will be used to determine the `id`.
 * `template`: Which template to use.  If not provided, `main` is assumed.
 
-So far, the content has to be written in Markdown.  In the future, more formats will be supported, but will be inferred
-by the file extension, so it's wise to name your files `<page>.md` for now.
+So far, the content has to be written in [CommonMark Markdown][commonmarkspec].  In the future, more formats will be
+supported, but will be inferred by the file extension, so it's wise to name your files `<page>.md` for now.
 
-The only modification done to the Markdown is that when you link, you use the `id` instead of an URL to link.  That will
-produce the correct link, regardless of where the page is in the hierarchy, e.g. `(link text)[id:another-page]`.
+Markdown links (`[text](uri)`) are modified by the system, if the `uri` starts with one of the following prefixes:
+
+* `id:` modifies the link to refer to the page the ID refers to, e.g. `(text)[id:another page]` -> 
+`(text)[/another-page.html]`.
+* `image:` modifies the link to add the media image path in front of it.  Right now, it's just `/media/images` (so put 
+your images in a directory named `images` inside your media directory), but that will change in the future.  It's useful
+when using including pictures, e.g. `![alt](image:logo.png)` -> `![alt](/media/images/logo.png)`.
+
+HTML inside the Markdown is supported.  But must be separated by two line breaks from the regular Markdown, e.g.
+
+    <header>
+    
+    # Header
+    
+    </header>
 
 Subdirectories are supported.  Simply create a directory and place pages within them.  The `id` should be unique
 throughout the site, and can be referenced from anywhere on the site.
 
 The resulting HTML file path will match that of its original file, e.g. `foo/bar.md` will become `foo/bar.html`.
+
+[commonmarkspec]: https://spec.commonmark.org/

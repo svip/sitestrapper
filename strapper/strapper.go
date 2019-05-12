@@ -27,6 +27,13 @@ type sitemapPage struct {
 	Content  string
 }
 
+func (p sitemapPage) PublicPath() string {
+	s:= strings.Replace(p.Path, "site/", "", 1)
+	s = strings.Replace(s, filepath.Ext(s), "", 1)
+	s = fmt.Sprintf("/%s.html", s)
+	return s
+}
+
 type sitemapMedia struct {
 	Type string
 	Path string
@@ -87,6 +94,8 @@ func (ss *SiteStrapper) fillInMissingSitemap() (err error) {
 				fileType = "stylesheet"
 			case ".js":
 				fileType = "script"
+			case ".png", ".jpg", ".jpeg", ".gif":
+				fileType = "image"
 			}
 
 			if len(fileType) == 0 {
@@ -171,19 +180,43 @@ type siteTemplate struct {
 	T      *template.Template
 }
 
-func parseContent(content string) (htmlContent string, err error) {
+func (ss *SiteStrapper) parseLink(original string, text string, link string) string {
+	s := strings.SplitN(link, ":", 2)
+	if len(s) != 2 {
+		return original
+	}
+	prefix := s[0]
+	id := s[1]
+	switch prefix {
+	case "id":
+		var page sitemapPage
+		found := false
+		for _, p := range ss.sitemap.Pages {
+			if p.ID == id {
+				page = p
+				found = true
+				break
+			}
+		}
+		if !found {
+			return original
+		}
+		return fmt.Sprintf("[%s](%s)", text, page.PublicPath())
+	case "image":
+		return fmt.Sprintf("[%s](%s/%s)", text, "/media/images/", id)
+	default:
+		return original
+	}
+}
+
+func (ss *SiteStrapper) parseContent(content string) (htmlContent string, err error) {
 	reLinks := regexp.MustCompile(`\[(.+)]\((.+)\)`)
 	content = reLinks.ReplaceAllStringFunc(content, func(found string) string {
 		g := reLinks.FindAllStringSubmatch(found, -1)
 		if len(g) != 1 {
 			return found
 		}
-		link := g[0][2]
-		if strings.HasPrefix(link, "http") {
-			return found
-		}
-		link = fmt.Sprintf("/%s.html", strings.ToLower(link))
-		return fmt.Sprintf("[%s](%s)", g[0][1], link)
+		return ss.parseLink(found, g[0][1], g[0][2])
 	})
 
 	md := markdown.New(markdown.HTML(true))
@@ -381,7 +414,7 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 		return errors.Errorf("no such template %s in page %s", page.Template, page.Path)
 	}
 
-	content, err := parseContent(page.Content)
+	content, err := ss.parseContent(page.Content)
 	if err != nil {
 		return err
 	}
@@ -421,21 +454,33 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 	return nil
 }
 
+func ensureDirectory(file string) (err error) {
+	dir := filepath.Dir(file)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.Mkdir(dir, os.ModePerm)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
 func (ss *SiteStrapper) writeMedia(media sitemapMedia) (err error) {
 	inPath := path.Join(ss.inputDirectory, media.Path)
 	mediaDir := path.Join(ss.outputDirectory, "media")
-	outPath := path.Join(mediaDir, media.Name)
+	p := strings.Replace(media.Path, "media/", "", 1)
+	outPath := path.Join(mediaDir, p)
 	ff, err := os.Open(inPath)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	defer ff.Close()
 
-	if _, err := os.Stat(mediaDir); os.IsNotExist(err) {
-		err := os.Mkdir(mediaDir, os.ModePerm)
-		if err != nil {
-			return errors.WithStack(err)
-		}
+	if err := ensureDirectory(mediaDir); err != nil {
+		return err
+	}
+	if err := ensureDirectory(outPath); err != nil {
+		return err
 	}
 
 	tf, err := os.Create(outPath)
