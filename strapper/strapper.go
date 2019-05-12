@@ -120,6 +120,9 @@ func (ss *SiteStrapper) fillInMissingSitemap() (err error) {
 			if info.IsDir() {
 				return nil
 			}
+			if filepath.Ext(path) == ".html" {
+				return nil
+			}
 			path = strings.Replace(path, ss.inputDirectory, "", 1)
 			newSitemap.Pages = append(newSitemap.Pages, sitemapPage{Path: path})
 			return nil
@@ -243,6 +246,78 @@ func (ss *SiteStrapper) getPage(ref string) (p page, err error) {
 	return p, errors.Errorf("could not find page %s", ref)
 }
 
+func (ss *SiteStrapper) makeSingleTemplate(name string, content string) (tmpl *template.Template, err error) {
+	tmpl, err = template.New(name).
+		Funcs(template.FuncMap{
+			"media": func(mediaType string) template.HTML {
+				var c template.HTML
+				for _, m := range ss.sitemap.Media {
+					if m.Type == mediaType {
+						switch m.Type {
+						case "stylesheet":
+							c += template.HTML(fmt.Sprintf(`<link rel="stylesheet" href="/%s" />`, m.Path))
+						case "script":
+							c += template.HTML(fmt.Sprintf(`<script src="/%s"></script>`, m.Path))
+						}
+					}
+				}
+				return c
+			},
+			"tmpl": func(name string, params ...string) template.HTML {
+				t, ok := ss.templates[name]
+				if !ok {
+					return template.HTML(fmt.Sprintf("<!-- could not find template %s -->", name))
+				}
+
+				out := bytes.NewBufferString("")
+				data := make(map[string]string)
+				for i, p := range params {
+					data[fmt.Sprintf("Param%d", i+1)] = p
+				}
+				err := t.T.Execute(out, data)
+				if err != nil {
+					log.Printf("cannot execute template %s (%v)\n", name, err)
+					return template.HTML("")
+				}
+
+				return template.HTML(out.String())
+			},
+			"page": func(id string) (page page) {
+				page, _ = ss.getPage(id)
+				return page
+			},
+			"pageLink": func(id string) string {
+				p, err := ss.getPage(id)
+				if err != nil {
+					return id
+				}
+				return p.Link
+			},
+			"imageLink": func(imageName string) string {
+				return fmt.Sprintf("/media/images/%s", imageName)
+			},
+			"pages": func(category string) (pages []page) {
+				c, ok := ss.sitemap.Categories[category]
+				if !ok {
+					return pages
+				}
+				for _, ref := range c {
+					p, err := ss.getPage(ref)
+					if err != nil {
+						continue
+					}
+					pages = append(pages, p)
+				}
+				return pages
+			},
+		}).
+		Parse(content)
+	if err != nil {
+		return tmpl, errors.WithStack(err)
+	}
+	return tmpl, nil
+}
+
 func (ss *SiteStrapper) makeTemplate(smT sitemapTemplate) (siteT *siteTemplate, err error) {
 	filename := path.Join(ss.inputDirectory, smT.Path)
 	f, err := os.Open(filename)
@@ -269,65 +344,9 @@ func (ss *SiteStrapper) makeTemplate(smT sitemapTemplate) (siteT *siteTemplate, 
 
 	content := strings.Trim(parts[1], " \n")
 
-	t, err := template.New(header.Name).
-		Funcs(template.FuncMap{
-			"media": func(mediaType string) template.HTML {
-				var c template.HTML
-				for _, m := range ss.sitemap.Media {
-					if m.Type == mediaType {
-						switch m.Type {
-						case "stylesheet":
-							c += template.HTML(fmt.Sprintf(`<link rel="stylesheet" href="/%s" />`, m.Path))
-						case "script":
-							c += template.HTML(fmt.Sprintf(`<script src="/%s"></script>`, m.Path))
-						}
-					}
-				}
-				return c
-			},
-			"tmpl": func(name string) template.HTML {
-				t, ok := ss.templates[name]
-				if !ok {
-					return template.HTML(fmt.Sprintf("<!-- could not find template %s -->", name))
-				}
-
-				out := bytes.NewBufferString("")
-				err := t.T.Execute(out, nil)
-				if err != nil {
-					log.Printf("cannot execute template %s\n", name)
-					return template.HTML("")
-				}
-
-				return template.HTML(out.String())
-			},
-			"page": func(id string) (page page) {
-				for _, p := range ss.sitemap.Pages {
-					if p.ID == id {
-						page.Title = p.LinkTitle
-						page.Link = p.Link
-						return page
-					}
-				}
-				return page // an empty one
-			},
-			"pages": func(category string) (pages []page) {
-				c, ok := ss.sitemap.Categories[category]
-				if !ok {
-					return pages
-				}
-				for _, ref := range c {
-					p, err := ss.getPage(ref)
-					if err != nil {
-						continue
-					}
-					pages = append(pages, p)
-				}
-				return pages
-			},
-		}).
-		Parse(content)
+	t, err := ss.makeSingleTemplate(header.Name, content)
 	if err != nil {
-		return siteT, errors.WithStack(err)
+		return siteT, err
 	}
 
 	siteT = &siteTemplate{
@@ -429,9 +448,20 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 		return err
 	}
 
+	ct, err := ss.makeSingleTemplate("page-content", content)
+	if err != nil {
+		return err
+	}
+
+	outContent := bytes.NewBufferString("")
+	err = ct.Execute(outContent, nil)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
 	out := bytes.NewBufferString("")
 	err = t.T.Execute(out, pageContents{
-		Content:   template.HTML(content),
+		Content:   template.HTML(outContent.String()),
 		Title:     page.Title,
 		SiteTitle: ss.sitemap.Title,
 	})

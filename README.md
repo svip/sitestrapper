@@ -70,12 +70,15 @@ In addition, the following functions are available:
 * `media`: List all media of a certain type (either "stylesheet" or "script).  This is useful for a header, if you wish
 to import all your stylesheets, e.g. `{{media "stylesheet"}}`.
 * `tmpl`: Import another template.  Like a footer or header, e.g. `{{tmpl "MainHeader"}}`, the name must correspond with
-the name of the template (although case insensitive).
+the name of the template (although case insensitive).  A template can take parameters, which is useful for making
+templates to handle common code occurrences.
 * `page`: Gets a single page based on its `id` (see below), so you can link to it with its title, like the below
 function.
 * `pages`: Returns a list of pages.  If a parameter is provided, it will only list pages from that category, provided in
 the configuration's `categories`.  You should range over this list, e.g. 
 `{{range pages "SectionA"}}<a href="{{.Link}}">{{.Title}}</a>{{end}}`
+* `pageLink`: Returns the link of a page, based on an ID.
+* `imageLink`: Returns the full image link, given simply a filename.
 
 Content
 -------
@@ -122,5 +125,19 @@ Subdirectories are supported.  Simply create a directory and place pages within 
 throughout the site, and can be referenced from anywhere on the site.
 
 The resulting HTML file path will match that of its original file, e.g. `foo/bar.md` will become `foo/bar.html`.
+
+### Templates in content
+
+Using the `{{tmpl}}` function described in the templates section, you can provide code snippets for common occurrences.
+The first parameter is always the name of the template, but you can provide any number of subsequent parameters, all
+understood to be strings.
+
+The template itself will then have access to these parameters through `{{.ParamN}}` variables, where `N` is the variable
+in question.  For instance, if you call a template like this: `{{tmpl "Test" "Data"}}` then `{{.Param1}}` will yield
+"Data" in template "Test".  A variable number of parameters are not supported for the same template, so if you have 
+excess parameters some times, provide empty ones, and use Go's template language's `{{if}}` to check whether it's set.
+
+Furthermore, templates are generated *after* the Markdown parser is run on the content, so the templates should only
+generate HTML.
 
 [commonmarkspec]: https://spec.commonmark.org/
