@@ -21,7 +21,6 @@ type sitemapPage struct {
 	Path      string
 	Subpages  []sitemapPage
 	ID        string
-	Link      string
 	Title     string
 	LinkTitle string
 	Template  string
@@ -238,7 +237,7 @@ func (ss *SiteStrapper) getPage(ref string) (p page, err error) {
 	for _, tmp := range ss.sitemap.Pages {
 		if tmp.ID == ref {
 			return page{
-				Link:  tmp.Link,
+				Link:  tmp.PublicPath(),
 				Title: tmp.LinkTitle,
 			}, nil
 		}
@@ -415,8 +414,6 @@ func (ss *SiteStrapper) gatherPageInfo(page *sitemapPage) (err error) {
 		page.ID = strings.ToLower(strings.Replace(strings.Replace(page.Path, "site/", "", 1), filepath.Ext(page.Path), "", 1))
 	}
 
-	page.Link = fmt.Sprintf("/%s.html", strings.Replace(page.ID, " ", "-", -1))
-
 	if len(header.Title) > 0 {
 		page.Title = header.Title
 	} else {
@@ -448,7 +445,7 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 		return err
 	}
 
-	ct, err := ss.makeSingleTemplate("page-content", content)
+	ct, err := ss.makeSingleTemplate(page.ID, content)
 	if err != nil {
 		return err
 	}
@@ -469,7 +466,7 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 		return errors.WithStack(err)
 	}
 
-	outFilenamePath := path.Join(ss.outputDirectory, page.Link[1:])
+	outFilenamePath := path.Join(ss.outputDirectory, page.PublicPath()[1:])
 	dir := filepath.Dir(outFilenamePath)
 	if _, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
