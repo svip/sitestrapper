@@ -494,7 +494,7 @@ func (ss *SiteStrapper) generatePage(page sitemapPage) (err error) {
 func ensureDirectory(file string) (err error) {
 	dir := filepath.Dir(file)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		err = os.Mkdir(dir, os.ModePerm)
+		err = os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			return errors.WithStack(err)
 		}
