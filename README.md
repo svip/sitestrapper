@@ -40,6 +40,7 @@ contain these.  The type of media will be guessed from the file extension.
 * `title`: The title for the site.  If not provided, it will just be empty.
 * `categories`: This allows you to order and list the pages by category.  This is useful if you have menus, that need
 sorting and categorising.
+* `safePaths`: A list of paths not to be deleted when the site is being generated.  Normally, the entire output directory is emptied.
 
 Generally speaking, it's probably best to provide the least amount for the configuration.  So generally, you should
 ignore `pages`, `media` and `templates`, since they can usually be inferred.

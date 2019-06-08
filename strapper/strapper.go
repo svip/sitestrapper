@@ -17,6 +17,17 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// layout of configuration file
+type sitemapStructure struct {
+	Title        string
+	Media        []sitemapMedia
+	BasePagePath string `yaml:"basePagePath"`
+	Pages        []sitemapPage
+	Templates    []sitemapTemplate
+	Categories   map[string][]string
+	SafePaths    []string `yaml:"safePaths"`
+}
+
 type sitemapPage struct {
 	Path      string
 	Subpages  []sitemapPage
@@ -42,15 +53,6 @@ type sitemapMedia struct {
 
 type sitemapTemplate struct {
 	Path string
-}
-
-type sitemapStructure struct {
-	Title        string
-	Media        []sitemapMedia
-	BasePagePath string
-	Pages        []sitemapPage
-	Templates    []sitemapTemplate
-	Categories   map[string][]string
 }
 
 func (s sitemapStructure) MediaMap() map[string]sitemapMedia {
@@ -549,6 +551,43 @@ func (ss *SiteStrapper) writeMedia(media sitemapMedia) (err error) {
 	return errors.WithStack(err)
 }
 
+func (ss *SiteStrapper) emptyDestination() (err error) {
+	err = filepath.Walk(ss.outputDirectory, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// first check if it was because we deleted it when we deleted directories
+			if os.IsNotExist(err) {
+				return nil // because then we can just skip it
+			}
+			return errors.WithStack(err)
+		}
+		if path == ss.outputDirectory {
+			return nil // don't delete the base directory
+		}
+		for _, safePath := range ss.sitemap.SafePaths {
+			if info.IsDir() {
+				// we don't want to delete a directory, that would delete our
+				// safe path, if it was a sub directory
+				pathParts := strings.Split(safePath, "/")
+				checkPath := ss.outputDirectory
+				for _, part := range pathParts {
+					checkPath = filepath.Join(checkPath, part)
+					if strings.HasPrefix(path, checkPath) {
+						return nil // then we can ignore
+					}
+				}
+			}
+			if strings.HasPrefix(path, filepath.Join(ss.outputDirectory, safePath)) {
+				return nil // ignore this path
+			}
+		}
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+		return nil
+	})
+	return err
+}
+
 func (ss *SiteStrapper) GenerateSite() (err error) {
 	err = ss.makeSitemap()
 	if err != nil {
@@ -565,6 +604,10 @@ func (ss *SiteStrapper) GenerateSite() (err error) {
 			return err
 		}
 		ss.sitemap.Pages[i] = page
+	}
+
+	if err := ss.emptyDestination(); err != nil {
+		return err
 	}
 
 	for _, page := range ss.sitemap.Pages {
